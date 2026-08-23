@@ -170,3 +170,17 @@ supabase functions deploy manage-teu-member
 The Edge Function automatically receives the Supabase URL, anon key, and service-role key from the Supabase runtime. Never put the service-role key in `config.js` or GitHub Pages.
 
 For an existing database, run the **SECURE TEU MEMBER AUTHENTICATION** section in `supabase.sql` before using the new member login system.
+
+
+## Current UI/auth fix
+
+This build fixes several issues from the previous secure-auth build:
+
+- The activity member field is now a roster-backed, disabled selector rather than a free-text callsign field.
+- A member account can only submit activity for the roster record linked to its Auth UUID.
+- Signing in as a TEU member no longer exposes admin roster controls.
+- Admin controls are only shown to recognized admins.
+- The public roster still loads even if the `auth_user_id` migration has not yet been run.
+- The roster shows monthly report totals and remains sorted by TEU rank.
+
+If the `auth_user_id` column has not yet been added to an existing database, run the **TEU AUTH MIGRATION SAFETY** section in `supabase.sql`.
