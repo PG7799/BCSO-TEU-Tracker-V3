@@ -18,7 +18,8 @@
       </div>
       <div class="header-actions">
         <span id="connectionStatus" class="status offline">Connecting…</span>
-        <button id="adminBtn" class="btn secondary">Admin</button>
+        <button id="memberLoginBtn" class="btn secondary" type="button">TEU Member Login</button>
+          <button id="adminBtn" class="btn secondary">Admin</button>
       </div>
     </header>
 
@@ -161,5 +162,21 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+
+  <div id="memberLoginModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>TEU Member Login</h3>
+        <button id="closeMemberLogin" class="modal-close" type="button">×</button>
+      </div>
+      <form id="memberLoginForm">
+        <label>Email<input id="memberEmail" type="email" required autocomplete="email"></label>
+        <label>Password<input id="memberPassword" type="password" required autocomplete="current-password"></label>
+        <button class="btn primary" type="submit">Sign In</button>
+      </form>
+      <div id="memberLoginMessage" class="form-message"></div>
+    </div>
+  </div>
+
 </body>
 </html>
