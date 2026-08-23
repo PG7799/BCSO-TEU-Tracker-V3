@@ -565,3 +565,152 @@ function renderRoster() {
   }).join("") :
   `<tr><td colspan="${showActions ? 7 : 6}" class="empty">No TEU members are currently listed.</td></tr>`;
 }
+async function addRosterMember(event) {
+  event.preventDefault();
+  if (!currentSession) {
+    showMessage("rosterMessage","Administrator authentication required.","error");
+    return;
+  }
+
+  const username=normalizeTEUUsername($("rosterUsername").value);
+  const password=$("rosterPassword").value;
+
+  if (username.length<3) {
+    showMessage("rosterMessage","Username must be at least 3 characters.","error"); return;
+  }
+  if (password.length<8) {
+    showMessage("rosterMessage","Password must be at least 8 characters.","error"); return;
+  }
+
+  const payload={
+    action:"create",
+    username,
+    password,
+    callsign:$("rosterCallsign").value.trim(),
+    name:$("rosterName").value.trim(),
+    rank:$("rosterRank").value.trim(),
+    subdivision_rank:$("rosterSubdivisionRank").value,
+    active:$("rosterActive").checked
+  };
+
+  if (!payload.callsign || !payload.name || !payload.rank) {
+    showMessage("rosterMessage","Complete all member fields.","error"); return;
+  }
+
+  const {data,error}=await sb.functions.invoke("manage-teu-member",{body:payload});
+  if (error || data?.error) {
+    showMessage("rosterMessage",data?.error || error?.message || "Could not create TEU account.","error");
+    return;
+  }
+
+  $("rosterForm").reset();
+  $("rosterActive").checked=true;
+  showMessage("rosterMessage",`Account "${username}" created and linked to ${payload.callsign}.`,"success");
+  await loadRoster();
+}
+
+async function editRosterMember(id) {
+  if (!currentSession) return;
+  const m = roster.find(x => String(x.id) === String(id));
+  if (!m) return;
+
+  const callsign = prompt("Callsign:", m.callsign); if (callsign === null) return;
+  const name = prompt("Name:", m.name); if (name === null) return;
+  const rank = prompt("Rank:", m.rank); if (rank === null) return;
+  const sub = prompt("Subdivision Rank (TEU Traffic Member, FTO, Co Commander, Commander):", m.subdivision_rank);
+  if (sub === null) return;
+  const activeInput = prompt("Active? Enter YES or NO:", m.active ? "YES" : "NO");
+  if (activeInput === null) return;
+
+  const allowed = ["TEU Traffic Member","FTO","Co Commander","Commander"];
+  if (!allowed.includes(sub.trim())) {
+    showMessage("rosterMessage", "Invalid subdivision rank.", "error");
+    return;
+  }
+
+  const {error} = await sb.from("teu_roster").update({
+    callsign: callsign.trim(),
+    name: name.trim(),
+    rank: rank.trim(),
+    subdivision_rank: sub.trim(),
+    active: activeInput.trim().toLowerCase() === "yes"
+  }).eq("id", id);
+
+  if (error) {
+    showMessage("rosterMessage", error.message, "error");
+    return;
+  }
+  showMessage("rosterMessage", "TEU member updated.", "success");
+  await loadRoster();
+}
+
+async function removeRosterMember(id) {
+  if (!currentSession) return;
+
+  const member = roster.find(x => String(x.id) === String(id));
+  if (!member) return;
+
+  if (!confirm(
+    `Remove ${member.name} (${member.callsign}) from the TEU roster?\n\nTheir login will also be disabled. Historical activity reports will remain.`
+  )) return;
+
+  const { data, error } = await sb.functions.invoke(
+    "manage-teu-member",
+    { body: { action: "remove", roster_id: id } }
+  );
+
+  if (error || data?.error) {
+    showMessage(
+      "rosterMessage",
+      data?.error || error?.message || "Could not remove TEU member.",
+      "error"
+    );
+    return;
+  }
+
+  showMessage("rosterMessage", "TEU member removed and login disabled.", "success");
+  await loadRoster();
+}
+window.editRosterMember = editRosterMember;
+window.removeRosterMember = removeRosterMember;
+
+async function resetMonth() {
+  if (!sb) {
+    showMessage("adminMessage", "Supabase is not configured.", "error");
+    return;
+  }
+
+  const {data: sessionData} = await sb.auth.getSession();
+  if (!sessionData.session) {
+    showMessage("adminMessage", "Administrator authentication required.", "error");
+    return;
+  }
+
+  if (!confirm(
+    "Reset ALL activity for the current month?\n\nThis cannot be undone."
+  )) return;
+
+  const {data, error} = await sb.rpc(
+    "reset_current_teu_month",
+    {target_month: monthKey(currentMonth)}
+  );
+
+  if (error) {
+    showMessage(
+      "adminMessage",
+      "The database rejected the reset. Make sure this Supabase user is listed in public.teu_admins.",
+      "error"
+    );
+    return;
+  }
+
+  showMessage(
+    "adminMessage",
+    `Reset complete. ${data || 0} entries removed.`,
+    "success"
+  );
+
+  await load();
+}
+
+setup();
