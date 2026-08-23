@@ -54,3 +54,6 @@ footer{text-align:center;color:#586575;font-size:11px;padding:20px}
   font-weight:900;
   font-size:14px;
 }
+
+#memberLoginModal .modal-card{max-width:420px}
+#member:disabled{opacity:.8;cursor:not-allowed}
