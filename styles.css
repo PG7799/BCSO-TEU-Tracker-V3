@@ -57,3 +57,13 @@ footer{text-align:center;color:#586575;font-size:11px;padding:20px}
 
 #memberLoginModal .modal-card{max-width:420px}
 #member:disabled{opacity:.8;cursor:not-allowed}
+
+/* Secure member-login state */
+#member:disabled{
+  opacity:.75;
+  cursor:not-allowed;
+}
+#rosterTable .monthly-reports{
+  min-width:34px;
+  text-align:center;
+}
