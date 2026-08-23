@@ -1,3 +1,21 @@
+\nwindow.addEventListener("error", (event) => {
+  console.error("TEU global error:", event.error || event.message);
+  const el = document.getElementById("formMessage");
+  if (el && el.textContent === "") {
+    el.textContent = `JavaScript error: ${event.message || "Unknown error"}`;
+    el.className = "form-message error";
+  }
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("TEU unhandled rejection:", event.reason);
+  const el = document.getElementById("formMessage");
+  if (el && el.textContent === "") {
+    el.textContent = `Request error: ${event.reason?.message || event.reason || "Unknown error"}`;
+    el.className = "form-message error";
+  }
+});
+
 const CATEGORIES = [
   {key:"arrest", label:"Arrests", icon:"⚖️"},
   {key:"pit", label:"PITs", icon:"🚓"},
