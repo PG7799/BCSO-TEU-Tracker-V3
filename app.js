@@ -62,6 +62,9 @@ function setup() {
   $("activityForm").addEventListener("submit", addActivity);
   $("refreshBtn").addEventListener("click", load);
   $("adminBtn").addEventListener("click", openAdmin);
+  $("memberLoginBtn").addEventListener("click", openMemberLogin);
+  $("closeMemberLogin").addEventListener("click", closeMemberLogin);
+  $("memberLoginForm").addEventListener("submit", memberLogin);
   $("closeAdmin").addEventListener("click", closeAdmin);
   $("loginForm").addEventListener("submit", login);
   $("logoutBtn").addEventListener("click", logout);
@@ -182,6 +185,11 @@ async function addActivity(event) {
     return;
   }
 
+  if (!currentSession) {
+    showMessage("formMessage", "Sign in with your TEU account before submitting activity.", "error");
+    return;
+  }
+
   const date = $("activityDate").value;
   if (!date) {
     showMessage("formMessage", "Choose an activity date.", "error");
@@ -233,6 +241,42 @@ async function addActivity(event) {
   $("notes").value = "";
   showMessage("formMessage", "Activity recorded.", "success");
   await load();
+}
+
+
+function openMemberLogin() {
+  $("memberLoginModal").classList.remove("hidden");
+}
+
+function closeMemberLogin() {
+  $("memberLoginModal").classList.add("hidden");
+}
+
+async function memberLogin(event) {
+  event.preventDefault();
+
+  if (!sb) {
+    showMessage("memberLoginMessage", "Supabase is not configured.", "error");
+    return;
+  }
+
+  const email = $("memberEmail").value.trim();
+  const password = $("memberPassword").value;
+
+  const {data, error} = await sb.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    showMessage("memberLoginMessage", "Invalid TEU login.", "error");
+    return;
+  }
+
+  closeMemberLogin();
+  updateAdminUI(data.session);
+  await loadRoster();
+  showMessage("formMessage", "Signed in. Activity will be recorded only under your roster account.", "success");
 }
 
 function openAdmin() {
@@ -312,7 +356,7 @@ async function loadRoster() {
 
   const {data, error} = await sb
     .from("teu_roster")
-    .select("id,callsign,name,rank,subdivision_rank,active,created_at,updated_at");
+    .select("id,callsign,name,rank,subdivision_rank,active,auth_user_id,created_at,updated_at");
 
   if (error) {
     showMessage("rosterMessage", error.message, "error");
@@ -329,18 +373,22 @@ function populateMemberSelect() {
 
   const previous = select.value;
 
-  select.innerHTML =
-    `<option value="">Select TEU member</option>` +
-    roster
-      .filter(member => member.active)
-      .map(member =>
-        `<option value="${escapeHtml(member.callsign)}">${escapeHtml(member.callsign)} — ${escapeHtml(member.name)}</option>`
-      )
-      .join("");
+  if (currentSession) {
+    const ownMember = roster.find(
+      member => member.auth_user_id === currentSession.user.id
+    );
 
-  if (roster.some(member => member.active && member.callsign === previous)) {
-    select.value = previous;
+    if (ownMember) {
+      select.innerHTML =
+        `<option value="${escapeHtml(ownMember.callsign)}">${escapeHtml(ownMember.callsign)} — ${escapeHtml(ownMember.name)}</option>`;
+      select.value = ownMember.callsign;
+      select.disabled = true;
+      return;
+    }
   }
+
+  select.innerHTML = `<option value="">Sign in as a TEU member to submit activity</option>`;
+  select.disabled = true;
 }
 
 function getCurrentMonthReportCount(callsign) {
@@ -408,32 +456,59 @@ function renderRoster() {
 }
 async function addRosterMember(event) {
   event.preventDefault();
+
   if (!currentSession) {
     showMessage("rosterMessage", "Administrator authentication required.", "error");
     return;
   }
+
+  const email = prompt("Member login email:");
+  if (!email) return;
+
+  const password = prompt(
+    "Temporary password (minimum 8 characters):"
+  );
+  if (!password) return;
+
   const payload = {
+    action: "create",
+    email: email.trim(),
+    password,
     callsign: $("rosterCallsign").value.trim(),
     name: $("rosterName").value.trim(),
     rank: $("rosterRank").value.trim(),
     subdivision_rank: $("rosterSubdivisionRank").value,
     active: $("rosterActive").checked
   };
+
   if (!payload.callsign || !payload.name || !payload.rank) {
     showMessage("rosterMessage", "Complete all member fields.", "error");
     return;
   }
-  const {error} = await sb.from("teu_roster").insert(payload);
-  if (error) {
-    showMessage("rosterMessage", error.message, "error");
+
+  const { data, error } = await sb.functions.invoke(
+    "manage-teu-member",
+    { body: payload }
+  );
+
+  if (error || data?.error) {
+    showMessage(
+      "rosterMessage",
+      data?.error || error?.message || "Could not create TEU member.",
+      "error"
+    );
     return;
   }
+
   $("rosterForm").reset();
   $("rosterActive").checked = true;
-  showMessage("rosterMessage", "TEU member added.", "success");
+  showMessage(
+    "rosterMessage",
+    "TEU member and authentication account created.",
+    "success"
+  );
   await loadRoster();
 }
-
 async function editRosterMember(id) {
   if (!currentSession) return;
   const m = roster.find(x => String(x.id) === String(id));
@@ -471,19 +546,31 @@ async function editRosterMember(id) {
 
 async function removeRosterMember(id) {
   if (!currentSession) return;
-  const m = roster.find(x => String(x.id) === String(id));
-  if (!m) return;
-  if (!confirm(`Remove ${m.name} (${m.callsign}) from the TEU roster?\n\nThis does not delete their activity statistics.`)) return;
 
-  const {error} = await sb.from("teu_roster").delete().eq("id", id);
-  if (error) {
-    showMessage("rosterMessage", error.message, "error");
+  const member = roster.find(x => String(x.id) === String(id));
+  if (!member) return;
+
+  if (!confirm(
+    `Remove ${member.name} (${member.callsign}) from the TEU roster?\n\nTheir login will also be disabled. Historical activity reports will remain.`
+  )) return;
+
+  const { data, error } = await sb.functions.invoke(
+    "manage-teu-member",
+    { body: { action: "remove", roster_id: id } }
+  );
+
+  if (error || data?.error) {
+    showMessage(
+      "rosterMessage",
+      data?.error || error?.message || "Could not remove TEU member.",
+      "error"
+    );
     return;
   }
-  showMessage("rosterMessage", "TEU member removed.", "success");
+
+  showMessage("rosterMessage", "TEU member removed and login disabled.", "success");
   await loadRoster();
 }
-
 window.editRosterMember = editRosterMember;
 window.removeRosterMember = removeRosterMember;
 
