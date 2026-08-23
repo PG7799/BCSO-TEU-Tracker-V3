@@ -143,3 +143,30 @@ updates the activity table, the monthly report total is refreshed.
 
 The SQL file also contains an optional `teu_monthly_member_reports` view for
 database-side reporting.
+
+
+## Secure TEU member authentication
+
+The roster now supports one authenticated Supabase account per TEU member.
+
+When an administrator adds a member:
+1. The admin enters the member's login email and temporary password.
+2. The `manage-teu-member` Supabase Edge Function securely creates the Auth account using the service-role key.
+3. The returned Auth UUID is automatically stored in `teu_roster.auth_user_id`.
+4. The member logs in with their own account.
+5. The activity form is locked to that member's roster callsign.
+6. Supabase RLS prevents the member from submitting activity for another callsign.
+
+When an admin removes a member, the Edge Function disables their Auth account and removes them from the roster. Historical `teu_events` remain.
+
+### Deploy the Edge Function
+
+Install the Supabase CLI and log into your Supabase project, then from the project folder run:
+
+```bash
+supabase functions deploy manage-teu-member
+```
+
+The Edge Function automatically receives the Supabase URL, anon key, and service-role key from the Supabase runtime. Never put the service-role key in `config.js` or GitHub Pages.
+
+For an existing database, run the **SECURE TEU MEMBER AUTHENTICATION** section in `supabase.sql` before using the new member login system.
