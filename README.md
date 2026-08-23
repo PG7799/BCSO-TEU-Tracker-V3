@@ -129,3 +129,17 @@ Order:
 4. TEU Traffic Member
 
 Within each TEU rank, active members appear first, then callsign order.
+
+
+## Monthly reports per roster member
+
+Activity is now assigned from the active TEU roster rather than a free-text
+member field. Each activity record stores the member's callsign. The roster
+then counts that member's activity for the current calendar month and displays
+the total next to their name.
+
+When an activity is added, edited roster data changes, or Supabase Realtime
+updates the activity table, the monthly report total is refreshed.
+
+The SQL file also contains an optional `teu_monthly_member_reports` view for
+database-side reporting.
