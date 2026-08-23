@@ -19,7 +19,7 @@ const SUPABASE_CONFIGURED =
   window.SUPABASE_ANON_KEY.length > 20 &&
   !window.SUPABASE_ANON_KEY.includes("YOUR_");
 
-const sb = SUPABASE_CONFIGURED
+const sb = SUPABASE_CONFIGURED && window.supabase
   ? window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY)
   : null;
 
@@ -82,8 +82,31 @@ function setup() {
     return;
   }
 
+  if (!window.supabase) {
+    setStatus(false, "Supabase SDK failed");
+    showMessage(
+      "formMessage",
+      "The Supabase JavaScript library did not load. Disable browser blocking/VPN extensions or use the included CDN fallback.",
+      "error"
+    );
+    return;
+  }
+
   setStatus(false, "Connecting…");
-  load();
+
+  Promise.race([
+    load(),
+    new Promise(resolve => setTimeout(resolve, 10000))
+  ]).then(() => {
+    if ($("connectionStatus").textContent === "Connecting…") {
+      setStatus(false, "Connection timeout");
+      showMessage(
+        "formMessage",
+        "Supabase did not respond within 10 seconds. Check the browser Network/Console panel and verify the Supabase project is active.",
+        "error"
+      );
+    }
+  });
 
   sb.auth.getSession().then(({data}) => updateAdminUI(data.session));
 
