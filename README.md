@@ -184,3 +184,10 @@ This build fixes several issues from the previous secure-auth build:
 - The roster shows monthly report totals and remains sorted by TEU rank.
 
 If the `auth_user_id` column has not yet been added to an existing database, run the **TEU AUTH MIGRATION SAFETY** section in `supabase.sql`.
+
+
+## Connection troubleshooting
+
+This build includes a fallback Supabase CDN and an explicit connection timeout.
+If the header says `Supabase SDK failed`, the browser/CDN is blocked. If it
+says `Connection timeout`, the Supabase project/network request did not return.
