@@ -245,3 +245,78 @@ group by
     r.rank,
     r.subdivision_rank,
     r.active;
+
+
+-- ============================================================
+-- SECURE TEU MEMBER AUTHENTICATION
+-- ============================================================
+
+ALTER TABLE public.teu_roster
+ADD COLUMN IF NOT EXISTS auth_user_id uuid;
+
+DO $$
+BEGIN
+    ALTER TABLE public.teu_roster
+    ADD CONSTRAINT teu_roster_auth_user_id_fkey
+    FOREIGN KEY (auth_user_id)
+    REFERENCES auth.users(id)
+    ON DELETE SET NULL;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS teu_roster_auth_user_id_unique
+ON public.teu_roster(auth_user_id)
+WHERE auth_user_id IS NOT NULL;
+
+
+-- Store a server-side relationship between the authenticated
+-- Supabase user and their TEU roster record.
+CREATE OR REPLACE FUNCTION public.current_teu_roster_member()
+RETURNS bigint
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT id
+    FROM public.teu_roster
+    WHERE auth_user_id = auth.uid()
+      AND active = true
+    LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.current_teu_roster_member() FROM public;
+GRANT EXECUTE ON FUNCTION public.current_teu_roster_member() TO authenticated;
+
+
+-- Remove the old public insert policy.
+DROP POLICY IF EXISTS "TEU public insert" ON public.teu_events;
+DROP POLICY IF EXISTS "TEU authenticated insert own activity" ON public.teu_events;
+
+
+-- A TEU member can only insert activity for the callsign
+-- belonging to their authenticated roster record.
+CREATE POLICY "TEU authenticated insert own activity"
+ON public.teu_events
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    member = (
+        SELECT callsign
+        FROM public.teu_roster
+        WHERE auth_user_id = auth.uid()
+          AND active = true
+        LIMIT 1
+    )
+    AND month_start = date_trunc('month', activity_date)::date
+);
+
+
+-- The public/anonymous role can no longer submit activity.
+-- Everyone can still READ the dashboard through the existing
+-- public SELECT policy.
+
+
+-- High-level admins are allowed to use the site as admins.
+-- This does not grant ordinary users roster modification rights.
