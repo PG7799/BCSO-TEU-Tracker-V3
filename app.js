@@ -186,7 +186,7 @@ async function addActivity(event) {
   }
 
   if (!currentSession) {
-    showMessage("formMessage", "Sign in with your TEU account before submitting activity.", "error");
+    showMessage("formMessage", "Sign in with your TEU member account before submitting activity.", "error");
     return;
   }
 
@@ -206,19 +206,19 @@ async function addActivity(event) {
     return;
   }
 
-  const selectedMember = $("member").value.trim();
-
-  if (!selectedMember) {
-    showMessage("formMessage", "Select a TEU member from the roster.", "error");
-    return;
-  }
-
   const rosterMember = roster.find(
-    member => String(member.callsign).toLowerCase() === selectedMember.toLowerCase()
+    member =>
+      member.auth_user_id &&
+      String(member.auth_user_id) === String(currentSession.user.id) &&
+      member.active
   );
 
-  if (!rosterMember || !rosterMember.active) {
-    showMessage("formMessage", "Only an active TEU roster member can be assigned activity.", "error");
+  if (!rosterMember) {
+    showMessage(
+      "formMessage",
+      "Your account is not linked to an active TEU roster member.",
+      "error"
+    );
     return;
   }
 
@@ -237,12 +237,10 @@ async function addActivity(event) {
     return;
   }
 
-  $("member").value = "";
   $("notes").value = "";
   showMessage("formMessage", "Activity recorded.", "success");
   await load();
 }
-
 
 function openMemberLogin() {
   $("memberLoginModal").classList.remove("hidden");
@@ -269,16 +267,35 @@ async function memberLogin(event) {
   });
 
   if (error) {
-    showMessage("memberLoginMessage", "Invalid TEU login.", "error");
+    showMessage("memberLoginMessage", error.message || "Invalid TEU login.", "error");
+    return;
+  }
+
+  await loadRoster();
+
+  const ownMember = roster.find(
+    member => member.auth_user_id === data.user.id
+  );
+
+  if (!ownMember) {
+    await sb.auth.signOut();
+    showMessage(
+      "memberLoginMessage",
+      "This account is not linked to an active TEU roster member. Ask an administrator to link your account.",
+      "error"
+    );
     return;
   }
 
   closeMemberLogin();
-  updateAdminUI(data.session);
-  await loadRoster();
-  showMessage("formMessage", "Signed in. Activity will be recorded only under your roster account.", "success");
+  await updateAdminUI(data.session);
+  $("memberPassword").value = "";
+  showMessage(
+    "formMessage",
+    `Signed in as ${ownMember.callsign} — ${ownMember.name}.`,
+    "success"
+  );
 }
-
 function openAdmin() {
   $("adminModal").classList.remove("hidden");
   updateAdminUIFromCurrentSession();
@@ -294,21 +311,57 @@ async function updateAdminUIFromCurrentSession() {
   updateAdminUI(data.session);
 }
 
-function updateAdminUI(session) {
+async function updateAdminUI(session) {
   currentSession = session || null;
-  $("rosterAdminControls").classList.toggle("hidden", !session);
-  $("rosterActionsHeader").classList.toggle("hidden", !session);
-  if (session) {
+
+  if (!session) {
+    $("rosterAdminControls").classList.add("hidden");
+    $("rosterActionsHeader").classList.add("hidden");
+    $("loginForm").classList.remove("hidden");
+    $("adminControls").classList.add("hidden");
+    $("adminStatus").textContent = "";
+    populateMemberSelect();
+    renderRoster();
+    return;
+  }
+
+  const email = String(session.user.email || "").toLowerCase();
+
+  // High-level administrator emails configured for this TEU tracker.
+  const highLevelEmails = [
+    "lc0628339@gmail.com",
+    "masterdevv27@gmail.com",
+    "ksickler1203@gmail.com"
+  ];
+
+  let isAdmin = highLevelEmails.includes(email);
+
+  // Also check the database admin table.
+  if (!isAdmin && sb) {
+    const { data: adminRow } = await sb
+      .from("teu_admins")
+      .select("user_id,security_level")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    isAdmin = !!adminRow;
+  }
+
+  $("rosterAdminControls").classList.toggle("hidden", !isAdmin);
+  $("rosterActionsHeader").classList.toggle("hidden", !isAdmin);
+
+  if (isAdmin) {
     $("loginForm").classList.add("hidden");
     $("adminControls").classList.remove("hidden");
-    $("adminStatus").textContent =
-      `Authenticated: ${session.user.email}`;
+    $("adminStatus").textContent = `Administrator: ${session.user.email}`;
   } else {
     $("loginForm").classList.remove("hidden");
     $("adminControls").classList.add("hidden");
   }
-}
 
+  populateMemberSelect();
+  renderRoster();
+}
 async function login(event) {
   event.preventDefault();
 
@@ -344,9 +397,12 @@ async function login(event) {
 
 async function logout() {
   if (sb) await sb.auth.signOut();
-  updateAdminUI(null);
+  await updateAdminUI(null);
   $("email").value = "";
   $("password").value = "";
+  $("memberEmail").value = "";
+  $("memberPassword").value = "";
+  await loadRoster();
   showMessage("adminMessage", "", "");
 }
 
@@ -354,28 +410,53 @@ async function logout() {
 async function loadRoster() {
   if (!sb) return;
 
-  const {data, error} = await sb
+  // Load the public roster fields first so the roster still displays even
+  // if the auth_user_id migration has not been run yet.
+  let { data, error } = await sb
     .from("teu_roster")
-    .select("id,callsign,name,rank,subdivision_rank,active,auth_user_id,created_at,updated_at");
+    .select("id,callsign,name,rank,subdivision_rank,active,created_at,updated_at");
 
   if (error) {
-    showMessage("rosterMessage", error.message, "error");
+    showMessage("rosterMessage", `Roster database error: ${error.message}`, "error");
+    roster = [];
+    renderRoster();
     return;
   }
 
   roster = data || [];
+
+  // Once the auth_user_id column exists, load it separately. This keeps the
+  // public roster functional during migration.
+  const authResult = await sb
+    .from("teu_roster")
+    .select("id,auth_user_id");
+
+  if (!authResult.error && authResult.data) {
+    const authById = new Map(
+      authResult.data.map(row => [String(row.id), row.auth_user_id])
+    );
+    roster = roster.map(member => ({
+      ...member,
+      auth_user_id: authById.get(String(member.id)) || null
+    }));
+  } else {
+    roster = roster.map(member => ({
+      ...member,
+      auth_user_id: null
+    }));
+  }
+
   renderRoster();
 }
-
 function populateMemberSelect() {
   const select = $("member");
   if (!select) return;
 
-  const previous = select.value;
-
   if (currentSession) {
     const ownMember = roster.find(
-      member => member.auth_user_id === currentSession.user.id
+      member => member.auth_user_id &&
+        String(member.auth_user_id) === String(currentSession.user.id) &&
+        member.active
     );
 
     if (ownMember) {
@@ -387,10 +468,9 @@ function populateMemberSelect() {
     }
   }
 
-  select.innerHTML = `<option value="">Sign in as a TEU member to submit activity</option>`;
+  select.innerHTML = `<option value="">Sign in as a TEU member</option>`;
   select.disabled = true;
 }
-
 function getCurrentMonthReportCount(callsign) {
   return events.filter(event =>
     event.member &&
