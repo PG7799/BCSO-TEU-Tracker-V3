@@ -191,3 +191,38 @@ If the `auth_user_id` column has not yet been added to an existing database, run
 This build includes a fallback Supabase CDN and an explicit connection timeout.
 If the header says `Supabase SDK failed`, the browser/CDN is blocked. If it
 says `Connection timeout`, the Supabase project/network request did not return.
+
+
+## Username-only TEU member accounts
+
+Regular TEU members now use a username and password. They do not provide a
+personal email address.
+
+Internally, the secure Edge Function creates a Supabase Auth identity using
+`<username>@teu.internal`. This is an internal identifier, not a real email
+address and is never collected from the member.
+
+Admins continue to use their normal administrator authentication.
+
+Run the USERNAME-ONLY TEU MEMBER ACCOUNTS section of `supabase.sql` before
+creating member accounts. Then deploy:
+
+```bash
+supabase functions deploy manage-teu-member
+```
+
+The admin roster workflow creates the Auth account and links it to the roster
+automatically. Removing a member disables their login while historical activity
+remains.
+
+## Username/password member accounts
+
+Regular TEU members now use username + password only. The secure Edge Function
+creates an internal Supabase Auth identity as `<username>@teu.internal`; no
+personal email is requested from the member. Admins create the account directly
+from the roster form.
+
+Deploy:
+`supabase functions deploy manage-teu-member`
+
+Run the username/password SQL section before testing.
