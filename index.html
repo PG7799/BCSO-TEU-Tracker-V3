@@ -90,7 +90,9 @@
               </select>
             </label>
             <label class="roster-active-check">Active<input id="rosterActive" type="checkbox" checked></label>
-            <button class="btn primary" type="submit">+ Add Member</button>
+            <label>Username<input id="rosterUsername" maxlength="40" required placeholder="e.g. 5216"></label>
+            <label>Password<input id="rosterPassword" type="password" minlength="8" required placeholder="Temporary password"></label>
+            <button class="btn primary" type="submit">+ Add Member & Account</button>
           </form>
           <div id="rosterMessage" class="form-message"></div>
         </div>
@@ -168,7 +170,7 @@
         <button id="closeMemberLogin" class="modal-close" type="button">×</button>
       </div>
       <form id="memberLoginForm">
-        <label>Email<input id="memberEmail" type="email" required autocomplete="email"></label>
+        <label>Username<input id="memberUsername" type="text" required autocomplete="username" placeholder="e.g. 5216"></label>
         <label>Password<input id="memberPassword" type="password" required autocomplete="current-password"></label>
         <button class="btn primary" type="submit">Sign In</button>
       </form>
