@@ -40,3 +40,17 @@ footer{text-align:center;color:#586575;font-size:11px;padding:20px}
 .btn.small{padding:7px 9px;font-size:11px;margin-right:4px}
 @media(max-width:1050px){.roster-form{grid-template-columns:1fr 1fr 1fr}.roster-form .btn{grid-column:1/-1}}
 @media(max-width:600px){.roster-form{grid-template-columns:1fr}.roster-form .btn{grid-column:auto}.roster-actions{display:flex;gap:5px}}
+
+.monthly-reports{
+  display:inline-flex;
+  min-width:34px;
+  height:30px;
+  padding:0 9px;
+  align-items:center;
+  justify-content:center;
+  border-radius:8px;
+  background:rgba(255,255,255,.07);
+  border:1px solid var(--border);
+  font-weight:900;
+  font-size:14px;
+}
