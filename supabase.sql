@@ -320,3 +320,27 @@ WITH CHECK (
 
 -- High-level admins are allowed to use the site as admins.
 -- This does not grant ordinary users roster modification rights.
+
+
+-- ============================================================
+-- TEU AUTH MIGRATION SAFETY
+-- Run this if teu_roster already existed before secure auth.
+-- ============================================================
+
+ALTER TABLE public.teu_roster
+ADD COLUMN IF NOT EXISTS auth_user_id uuid;
+
+DO $$
+BEGIN
+  ALTER TABLE public.teu_roster
+  ADD CONSTRAINT teu_roster_auth_user_id_fkey
+  FOREIGN KEY (auth_user_id)
+  REFERENCES auth.users(id)
+  ON DELETE SET NULL;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS teu_roster_auth_user_id_unique
+ON public.teu_roster(auth_user_id)
+WHERE auth_user_id IS NOT NULL;
