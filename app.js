@@ -292,22 +292,51 @@ async function logout() {
 
 async function loadRoster() {
   if (!sb) return;
-  const {data, error} = await sb.from("teu_roster")
-    .select("id,callsign,name,rank,subdivision_rank,active,created_at,updated_at")
-    .order("active", {ascending:false})
-    .order("callsign", {ascending:true});
+
+  const {data, error} = await sb
+    .from("teu_roster")
+    .select("id,callsign,name,rank,subdivision_rank,active,created_at,updated_at");
+
   if (error) {
     showMessage("rosterMessage", error.message, "error");
     return;
   }
+
   roster = data || [];
   renderRoster();
 }
-
 function renderRoster() {
+  const rankOrder = {
+    "Commander": 0,
+    "Co Commander": 1,
+    "FTO": 2,
+    "TEU Traffic Member": 3
+  };
+
+  // Always sort immediately before rendering.
+  // This guarantees new/realtime/edited members move to the correct position.
+  roster.sort((a, b) => {
+    const rankDifference =
+      (rankOrder[a.subdivision_rank] ?? 99) -
+      (rankOrder[b.subdivision_rank] ?? 99);
+
+    if (rankDifference !== 0) return rankDifference;
+
+    // Within the same TEU rank, active members come first.
+    if (a.active !== b.active) return a.active ? -1 : 1;
+
+    // Finally, sort by callsign.
+    return String(a.callsign).localeCompare(
+      String(b.callsign),
+      undefined,
+      {numeric: true, sensitivity: "base"}
+    );
+  });
+
   const activeCount = roster.filter(m => m.active).length;
   $("rosterCount").textContent =
     `${roster.length} Member${roster.length === 1 ? "" : "s"} • ${activeCount} Active`;
+
   $("rosterTable").innerHTML = roster.length ? roster.map(m => `
     <tr class="${m.active ? "" : "inactive-row"}">
       <td><strong>${escapeHtml(m.callsign)}</strong></td>
@@ -322,7 +351,6 @@ function renderRoster() {
     </tr>`).join("") :
     `<tr><td colspan="${currentSession ? 6 : 5}" class="empty">No TEU members are currently listed.</td></tr>`;
 }
-
 async function addRosterMember(event) {
   event.preventDefault();
   if (!currentSession) {
