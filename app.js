@@ -120,6 +120,7 @@ async function load() {
   renderStats();
   renderSummary();
   renderTable();
+  renderRoster();
 }
 
 function renderStats() {
@@ -197,9 +198,25 @@ async function addActivity(event) {
     return;
   }
 
+  const selectedMember = $("member").value.trim();
+
+  if (!selectedMember) {
+    showMessage("formMessage", "Select a TEU member from the roster.", "error");
+    return;
+  }
+
+  const rosterMember = roster.find(
+    member => String(member.callsign).toLowerCase() === selectedMember.toLowerCase()
+  );
+
+  if (!rosterMember || !rosterMember.active) {
+    showMessage("formMessage", "Only an active TEU roster member can be assigned activity.", "error");
+    return;
+  }
+
   const payload = {
     category: $("category").value,
-    member: $("member").value.trim() || null,
+    member: rosterMember.callsign,
     activity_date: date,
     month_start: monthKey(dateObject),
     notes: $("notes").value.trim() || null
@@ -305,6 +322,35 @@ async function loadRoster() {
   roster = data || [];
   renderRoster();
 }
+
+function populateMemberSelect() {
+  const select = $("member");
+  if (!select) return;
+
+  const previous = select.value;
+
+  select.innerHTML =
+    `<option value="">Select TEU member</option>` +
+    roster
+      .filter(member => member.active)
+      .map(member =>
+        `<option value="${escapeHtml(member.callsign)}">${escapeHtml(member.callsign)} — ${escapeHtml(member.name)}</option>`
+      )
+      .join("");
+
+  if (roster.some(member => member.active && member.callsign === previous)) {
+    select.value = previous;
+  }
+}
+
+function getCurrentMonthReportCount(callsign) {
+  return events.filter(event =>
+    event.member &&
+    String(event.member).toLowerCase() === String(callsign).toLowerCase() &&
+    monthKey(new Date(`${event.activity_date}T00:00:00`)) === monthKey(currentMonth)
+  ).length;
+}
+
 function renderRoster() {
   const rankOrder = {
     "Commander": 0,
@@ -313,8 +359,6 @@ function renderRoster() {
     "TEU Traffic Member": 3
   };
 
-  // Always sort immediately before rendering.
-  // This guarantees new/realtime/edited members move to the correct position.
   roster.sort((a, b) => {
     const rankDifference =
       (rankOrder[a.subdivision_rank] ?? 99) -
@@ -322,10 +366,8 @@ function renderRoster() {
 
     if (rankDifference !== 0) return rankDifference;
 
-    // Within the same TEU rank, active members come first.
     if (a.active !== b.active) return a.active ? -1 : 1;
 
-    // Finally, sort by callsign.
     return String(a.callsign).localeCompare(
       String(b.callsign),
       undefined,
@@ -333,23 +375,36 @@ function renderRoster() {
     );
   });
 
+  populateMemberSelect();
+
   const activeCount = roster.filter(m => m.active).length;
   $("rosterCount").textContent =
     `${roster.length} Member${roster.length === 1 ? "" : "s"} • ${activeCount} Active`;
 
-  $("rosterTable").innerHTML = roster.length ? roster.map(m => `
-    <tr class="${m.active ? "" : "inactive-row"}">
-      <td><strong>${escapeHtml(m.callsign)}</strong></td>
-      <td>${escapeHtml(m.name)}</td>
-      <td>${escapeHtml(m.rank)}</td>
-      <td>${escapeHtml(m.subdivision_rank)}</td>
-      <td><span class="roster-status ${m.active ? "active" : "inactive"}">${m.active ? "ACTIVE" : "INACTIVE"}</span></td>
-      ${currentSession ? `<td class="roster-actions">
-        <button class="btn secondary small" onclick="editRosterMember('${m.id}')">Edit</button>
-        <button class="btn danger small" onclick="removeRosterMember('${m.id}')">Remove</button>
-      </td>` : ""}
-    </tr>`).join("") :
-    `<tr><td colspan="${currentSession ? 6 : 5}" class="empty">No TEU members are currently listed.</td></tr>`;
+  $("rosterTable").innerHTML = roster.length ? roster.map(m => {
+    const monthlyReports = getCurrentMonthReportCount(m.callsign);
+
+    return `
+      <tr class="${m.active ? "" : "inactive-row"}">
+        <td><strong>${escapeHtml(m.callsign)}</strong></td>
+        <td>${escapeHtml(m.name)}</td>
+        <td>${escapeHtml(m.rank)}</td>
+        <td>${escapeHtml(m.subdivision_rank)}</td>
+        <td>
+          <span class="monthly-reports">${monthlyReports}</span>
+        </td>
+        <td>
+          <span class="roster-status ${m.active ? "active" : "inactive"}">
+            ${m.active ? "ACTIVE" : "INACTIVE"}
+          </span>
+        </td>
+        ${currentSession ? `<td class="roster-actions">
+          <button class="btn secondary small" onclick="editRosterMember('${m.id}')">Edit</button>
+          <button class="btn danger small" onclick="removeRosterMember('${m.id}')">Remove</button>
+        </td>` : ""}
+      </tr>`;
+  }).join("") :
+  `<tr><td colspan="${currentSession ? 7 : 6}" class="empty">No TEU members are currently listed.</td></tr>`;
 }
 async function addRosterMember(event) {
   event.preventDefault();
