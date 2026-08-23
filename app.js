@@ -1,4 +1,4 @@
-\nwindow.addEventListener("error", (event) => {
+window.addEventListener("error", (event) => {
   console.error("TEU global error:", event.error || event.message);
   const el = document.getElementById("formMessage");
   if (el && el.textContent === "") {
