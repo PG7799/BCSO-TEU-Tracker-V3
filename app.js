@@ -104,16 +104,27 @@ function setup() {
 
   Promise.race([
     load(),
-    new Promise(resolve => setTimeout(resolve, 10000))
-  ]).then(() => {
-    if ($("connectionStatus").textContent === "Connecting…") {
+    new Promise(resolve => setTimeout(() => resolve("__TIMEOUT__"), 10000))
+  ])
+  .then(result => {
+    if (result === "__TIMEOUT__" &&
+        $("connectionStatus").textContent === "Connecting…") {
       setStatus(false, "Connection timeout");
       showMessage(
         "formMessage",
-        "Supabase did not respond within 10 seconds. Check the browser Network/Console panel and verify the Supabase project is active.",
+        "Supabase did not respond within 10 seconds. Open F12 → Console for the exact error.",
         "error"
       );
     }
+  })
+  .catch(error => {
+    console.error("TEU initial load failed:", error);
+    setStatus(false, "Connection error");
+    showMessage(
+      "formMessage",
+      `Database connection error: ${error?.message || error}`,
+      "error"
+    );
   });
 
   sb.auth.getSession().then(({data}) => updateAdminUI(data.session));
@@ -134,27 +145,46 @@ function setup() {
 }
 
 async function load() {
-  if (!sb) return;
-
-  const {data, error} = await sb
-    .from("teu_events")
-    .select("id,category,member,activity_date,notes,created_at")
-    .eq("month_start", monthKey(currentMonth))
-    .order("created_at", {ascending:false});
-
-  if (error) {
-    setStatus(false, "Database error");
-    showMessage("formMessage", error.message, "error");
-    return;
+  if (!sb) {
+    throw new Error("Supabase client was not initialized.");
   }
 
-  events = data || [];
-  await loadRoster();
-  setStatus(true, "Live");
-  renderStats();
-  renderSummary();
-  renderTable();
-  renderRoster();
+  try {
+    const {data, error} = await sb
+      .from("teu_events")
+      .select("id,category,member,activity_date,notes,created_at")
+      .eq("month_start", monthKey(currentMonth))
+      .order("created_at", {ascending:false});
+
+    if (error) {
+      setStatus(false, "Database error");
+      showMessage("formMessage", error.message, "error");
+      throw error;
+    }
+
+    events = data || [];
+
+    await loadRoster();
+
+    setStatus(true, "Live");
+    renderStats();
+    renderSummary();
+    renderTable();
+    renderRoster();
+
+    return true;
+  } catch (error) {
+    console.error("TEU load() failed:", error);
+    if ($("connectionStatus").textContent === "Connecting…") {
+      setStatus(false, "Database error");
+    }
+    showMessage(
+      "formMessage",
+      `Database error: ${error?.message || error}`,
+      "error"
+    );
+    throw error;
+  }
 }
 
 function renderStats() {
@@ -437,44 +467,54 @@ async function logout() {
 async function loadRoster() {
   if (!sb) return;
 
-  // Load the public roster fields first so the roster still displays even
-  // if the auth_user_id migration has not been run yet.
-  let { data, error } = await sb
+  let {data, error} = await sb
     .from("teu_roster")
-    .select("id,callsign,name,rank,subdivision_rank,active,created_at,updated_at");
+    .select("id,callsign,name,rank,subdivision_rank,active,auth_user_id,created_at,updated_at");
 
   if (error) {
-    showMessage("rosterMessage", `Roster database error: ${error.message}`, "error");
-    roster = [];
-    renderRoster();
-    return;
+    // Backward-compatible fallback if auth_user_id has not been added yet.
+    const fallback = await sb
+      .from("teu_roster")
+      .select("id,callsign,name,rank,subdivision_rank,active,created_at,updated_at");
+
+    if (fallback.error) {
+      showMessage(
+        "rosterMessage",
+        `Roster database error: ${fallback.error.message}`,
+        "error"
+      );
+      roster = [];
+      renderRoster();
+      throw fallback.error;
+    }
+
+    data = fallback.data || [];
   }
 
   roster = data || [];
 
-  // Once the auth_user_id column exists, load it separately. This keeps the
-  // public roster functional during migration.
-  const authResult = await sb
-    .from("teu_roster")
-    .select("id,auth_user_id");
+  // If the migration exists but auth_user_id was not returned, try separately.
+  if (roster.length && !Object.prototype.hasOwnProperty.call(roster[0], "auth_user_id")) {
+    const authResult = await sb
+      .from("teu_roster")
+      .select("id,auth_user_id");
 
-  if (!authResult.error && authResult.data) {
-    const authById = new Map(
-      authResult.data.map(row => [String(row.id), row.auth_user_id])
-    );
-    roster = roster.map(member => ({
-      ...member,
-      auth_user_id: authById.get(String(member.id)) || null
-    }));
-  } else {
-    roster = roster.map(member => ({
-      ...member,
-      auth_user_id: null
-    }));
+    if (!authResult.error && authResult.data) {
+      const authById = new Map(
+        authResult.data.map(row => [String(row.id), row.auth_user_id])
+      );
+
+      roster = roster.map(member => ({
+        ...member,
+        auth_user_id: authById.get(String(member.id)) || null
+      }));
+    }
   }
 
   renderRoster();
+  return roster;
 }
+
 function populateMemberSelect() {
   const select = $("member");
   if (!select) return;
