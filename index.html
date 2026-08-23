@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BCSO TEU Activity Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="badge">BCSO</div>
+        <div>
+          <h1>Traffic Enforcement Unit</h1>
+          <p>Monthly Activity Tracker</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="connectionStatus" class="status offline">Connecting…</span>
+        <button id="adminBtn" class="btn secondary">Admin</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">CURRENT REPORTING PERIOD</p>
+          <h2 id="monthTitle">Loading month…</h2>
+          <p class="muted">Entries are shared in real time with everyone viewing this dashboard.</p>
+        </div>
+        <div class="live-dot"><span></span> LIVE</div>
+      </section>
+
+      <section id="statsGrid" class="stats-grid"></section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Record TEU Activity</h3>
+            <p class="muted">Submit an activity and the dashboard will update automatically.</p>
+          </div>
+        </div>
+
+        <form id="activityForm" class="activity-form">
+          <label>
+            Activity
+            <select id="category" required></select>
+          </label>
+          <label>
+            Member / Callsign
+            <input id="member" maxlength="80" placeholder="e.g. 5216 / Sgt. Smith">
+          </label>
+          <label>
+            Date
+            <input id="activityDate" type="date" required>
+          </label>
+          <label class="wide">
+            Notes
+            <input id="notes" maxlength="200" placeholder="Optional details">
+          </label>
+          <button class="btn primary" type="submit">+ Add Activity</button>
+        </form>
+        <div id="formMessage" class="form-message"></div>
+      </section>
+
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>TEU Roster</h3>
+            <p class="muted">Current Traffic Enforcement Unit membership and status.</p>
+          </div>
+          <span id="rosterCount" class="roster-count">0 Members</span>
+        </div>
+        <div id="rosterAdminControls" class="roster-admin hidden">
+          <form id="rosterForm" class="roster-form">
+            <label>Callsign<input id="rosterCallsign" maxlength="30" required placeholder="e.g. 5216"></label>
+            <label>Name<input id="rosterName" maxlength="80" required placeholder="Full name"></label>
+            <label>Rank<input id="rosterRank" maxlength="50" required placeholder="Sergeant"></label>
+            <label>Subdivision Rank
+              <select id="rosterSubdivisionRank" required>
+                <option value="TEU Traffic Member">TEU Traffic Member</option>
+                <option value="FTO">FTO</option>
+                <option value="Co Commander">Co Commander</option>
+                <option value="Commander">Commander</option>
+              </select>
+            </label>
+            <label class="roster-active-check">Active<input id="rosterActive" type="checkbox" checked></label>
+            <button class="btn primary" type="submit">+ Add Member</button>
+          </form>
+          <div id="rosterMessage" class="form-message"></div>
+        </div>
+        <div class="table-wrap">
+          <table class="roster-table">
+            <thead><tr>
+              <th>Callsign</th><th>Name</th><th>Rank</th><th>Subdivision Rank</th><th>Status</th>
+              <th id="rosterActionsHeader" class="hidden">Actions</th>
+            </tr></thead>
+            <tbody id="rosterTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Recent Activity</h3>
+            <p class="muted">Latest entries for this month.</p>
+          </div>
+          <button id="refreshBtn" class="btn secondary">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Activity</th>
+                <th>Member / Callsign</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="activityTable"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Monthly Summary</h3>
+            <p class="muted">A quick breakdown of TEU activity.</p>
+          </div>
+        </div>
+        <div id="summary" class="summary"></div>
+      </section>
+    </main>
+
+    <footer>BCSO TEU Activity Tracker • Built for roleplay/community use</footer>
+  </div>
+
+  <div id="adminModal" class="modal hidden">
+    <div class="modal-card">
+      <button class="modal-close" id="closeAdmin">×</button>
+      <h3>Admin Controls</h3>
+      <p class="muted">Sign in with your Supabase admin account to access management tools.</p>
+      <form id="loginForm">
+        <label>Email<input id="email" type="email" required></label>
+        <label>Password<input id="password" type="password" required></label>
+        <button class="btn primary" type="submit">Sign In</button>
+      </form>
+      <div id="adminControls" class="hidden">
+        <div class="admin-status" id="adminStatus"></div>
+        <button id="resetMonthBtn" class="btn danger">Reset Current Month</button>
+        <button id="logoutBtn" class="btn secondary">Sign Out</button>
+      </div>
+      <div id="adminMessage" class="form-message"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
