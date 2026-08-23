@@ -78,7 +78,9 @@ begin
         select 1
         from public.teu_admins
         where user_id = auth.uid()
-    ) then
+    )
+    and lower(coalesce(auth.jwt() ->> 'email', '')) <> 'lc0628339@gmail.com'
+    then
         raise exception 'Not authorized';
     end if;
 
@@ -156,28 +158,44 @@ drop policy if exists "TEU admins can insert roster" on public.teu_roster;
 create policy "TEU admins can insert roster"
 on public.teu_roster for insert
 to authenticated
-with check (exists (
-    select 1 from public.teu_admins where user_id = auth.uid()
-));
+with check (
+    exists (
+        select 1 from public.teu_admins
+        where user_id = auth.uid()
+    )
+    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'lc0628339@gmail.com'
+);
 
 drop policy if exists "TEU admins can update roster" on public.teu_roster;
 create policy "TEU admins can update roster"
 on public.teu_roster for update
 to authenticated
-using (exists (
-    select 1 from public.teu_admins where user_id = auth.uid()
-))
-with check (exists (
-    select 1 from public.teu_admins where user_id = auth.uid()
-));
+using (
+    exists (
+        select 1 from public.teu_admins
+        where user_id = auth.uid()
+    )
+    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'lc0628339@gmail.com'
+)
+with check (
+    exists (
+        select 1 from public.teu_admins
+        where user_id = auth.uid()
+    )
+    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'lc0628339@gmail.com'
+);
 
 drop policy if exists "TEU admins can delete roster" on public.teu_roster;
 create policy "TEU admins can delete roster"
 on public.teu_roster for delete
 to authenticated
-using (exists (
-    select 1 from public.teu_admins where user_id = auth.uid()
-));
+using (
+    exists (
+        select 1 from public.teu_admins
+        where user_id = auth.uid()
+    )
+    or lower(coalesce(auth.jwt() ->> 'email', '')) = 'lc0628339@gmail.com'
+);
 
 create or replace function public.update_teu_roster_timestamp()
 returns trigger
