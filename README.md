@@ -114,3 +114,18 @@ The roster automatically sorts by TEU subdivision rank:
 4. TEU Traffic Member
 
 Active members appear before inactive members. Members with the same TEU rank are sorted by callsign.
+
+
+### Roster sorting behavior
+
+The roster is sorted in the browser every time it renders, including after a
+new member is added, an existing member is edited, a member is removed, or
+Supabase Realtime sends an update.
+
+Order:
+1. Commander
+2. Co Commander
+3. FTO
+4. TEU Traffic Member
+
+Within each TEU rank, active members appear first, then callsign order.
