@@ -92,3 +92,25 @@ Everyone can view the roster. Only authenticated users listed in `public.teu_adm
 Roster changes use Supabase Realtime, so connected users see changes immediately.
 
 If your database already exists, run the **TEU ROSTER** section at the bottom of `supabase.sql` in Supabase SQL Editor. You do not need to delete the existing activity table.
+
+
+## Roster RLS fix
+
+The roster policies authorize the authenticated TEU administrator account
+`lc0628339@gmail.com` in addition to users explicitly listed in `teu_admins`.
+This prevents the "new row violates row-level security policy" error when the
+admin UUID has not yet been inserted into `teu_admins`.
+
+The database-side reset function uses the same authorization rule.
+
+
+## Roster sorting
+
+The roster automatically sorts by TEU subdivision rank:
+
+1. Commander
+2. Co Commander
+3. FTO
+4. TEU Traffic Member
+
+Active members appear before inactive members. Members with the same TEU rank are sorted by callsign.
