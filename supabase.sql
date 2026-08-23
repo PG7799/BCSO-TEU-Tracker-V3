@@ -217,3 +217,31 @@ begin
   alter publication supabase_realtime add table public.teu_roster;
 exception when duplicate_object then null;
 end $$;
+
+
+-- ============================================================
+-- TEU MONTHLY REPORT TOTALS
+-- The website calculates the current month's totals from
+-- teu_events. This view is also available for reporting.
+-- ============================================================
+
+create or replace view public.teu_monthly_member_reports as
+select
+    r.id as roster_id,
+    r.callsign,
+    r.name,
+    r.rank,
+    r.subdivision_rank,
+    r.active,
+    count(e.id)::integer as monthly_reports
+from public.teu_roster r
+left join public.teu_events e
+    on lower(e.member) = lower(r.callsign)
+    and e.month_start = date_trunc('month', current_date)::date
+group by
+    r.id,
+    r.callsign,
+    r.name,
+    r.rank,
+    r.subdivision_rank,
+    r.active;
