@@ -30,6 +30,13 @@ let events = [];
 let roster = [];
 let currentSession = null;
 
+function normalizeTEUUsername(value = "") {
+  return String(value).trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+}
+function internalTEUEmail(username) {
+  return `${normalizeTEUUsername(username)}@teu.internal`;
+}
+
 function monthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-01`;
 }
@@ -275,50 +282,44 @@ function closeMemberLogin() {
 
 async function memberLogin(event) {
   event.preventDefault();
+  if (!sb) { showMessage("memberLoginMessage","Supabase is not configured.","error"); return; }
 
-  if (!sb) {
-    showMessage("memberLoginMessage", "Supabase is not configured.", "error");
+  const username = normalizeTEUUsername($("memberUsername").value);
+  const password = $("memberPassword").value;
+  if (!username || !password) {
+    showMessage("memberLoginMessage","Enter your username and password.","error");
     return;
   }
 
-  const email = $("memberEmail").value.trim();
-  const password = $("memberPassword").value;
-
-  const {data, error} = await sb.auth.signInWithPassword({
-    email,
+  const {data,error}=await sb.auth.signInWithPassword({
+    email: internalTEUEmail(username),
     password
   });
 
   if (error) {
-    showMessage("memberLoginMessage", error.message || "Invalid TEU login.", "error");
+    showMessage("memberLoginMessage","Invalid username or password.","error");
     return;
   }
 
   await loadRoster();
-
-  const ownMember = roster.find(
-    member => member.auth_user_id === data.user.id
+  const ownMember=roster.find(m =>
+    m.auth_user_id &&
+    String(m.auth_user_id)===String(data.user.id) &&
+    m.active
   );
 
   if (!ownMember) {
     await sb.auth.signOut();
-    showMessage(
-      "memberLoginMessage",
-      "This account is not linked to an active TEU roster member. Ask an administrator to link your account.",
-      "error"
-    );
+    showMessage("memberLoginMessage","This account is not linked to an active TEU roster member.","error");
     return;
   }
 
   closeMemberLogin();
   await updateAdminUI(data.session);
-  $("memberPassword").value = "";
-  showMessage(
-    "formMessage",
-    `Signed in as ${ownMember.callsign} — ${ownMember.name}.`,
-    "success"
-  );
+  $("memberPassword").value="";
+  showMessage("formMessage",`Signed in as ${ownMember.callsign} — ${ownMember.name}.`,"success");
 }
+
 function openAdmin() {
   $("adminModal").classList.remove("hidden");
   updateAdminUIFromCurrentSession();
@@ -423,7 +424,7 @@ async function logout() {
   await updateAdminUI(null);
   $("email").value = "";
   $("password").value = "";
-  $("memberEmail").value = "";
+  $("memberUsername").value = "";
   $("memberPassword").value = "";
   await loadRoster();
   showMessage("adminMessage", "", "");
@@ -559,59 +560,48 @@ function renderRoster() {
 }
 async function addRosterMember(event) {
   event.preventDefault();
-
   if (!currentSession) {
-    showMessage("rosterMessage", "Administrator authentication required.", "error");
+    showMessage("rosterMessage","Administrator authentication required.","error");
     return;
   }
 
-  const email = prompt("Member login email:");
-  if (!email) return;
+  const username=normalizeTEUUsername($("rosterUsername").value);
+  const password=$("rosterPassword").value;
 
-  const password = prompt(
-    "Temporary password (minimum 8 characters):"
-  );
-  if (!password) return;
+  if (username.length<3) {
+    showMessage("rosterMessage","Username must be at least 3 characters.","error"); return;
+  }
+  if (password.length<8) {
+    showMessage("rosterMessage","Password must be at least 8 characters.","error"); return;
+  }
 
-  const payload = {
-    action: "create",
-    email: email.trim(),
+  const payload={
+    action:"create",
+    username,
     password,
-    callsign: $("rosterCallsign").value.trim(),
-    name: $("rosterName").value.trim(),
-    rank: $("rosterRank").value.trim(),
-    subdivision_rank: $("rosterSubdivisionRank").value,
-    active: $("rosterActive").checked
+    callsign:$("rosterCallsign").value.trim(),
+    name:$("rosterName").value.trim(),
+    rank:$("rosterRank").value.trim(),
+    subdivision_rank:$("rosterSubdivisionRank").value,
+    active:$("rosterActive").checked
   };
 
   if (!payload.callsign || !payload.name || !payload.rank) {
-    showMessage("rosterMessage", "Complete all member fields.", "error");
-    return;
+    showMessage("rosterMessage","Complete all member fields.","error"); return;
   }
 
-  const { data, error } = await sb.functions.invoke(
-    "manage-teu-member",
-    { body: payload }
-  );
-
+  const {data,error}=await sb.functions.invoke("manage-teu-member",{body:payload});
   if (error || data?.error) {
-    showMessage(
-      "rosterMessage",
-      data?.error || error?.message || "Could not create TEU member.",
-      "error"
-    );
+    showMessage("rosterMessage",data?.error || error?.message || "Could not create TEU account.","error");
     return;
   }
 
   $("rosterForm").reset();
-  $("rosterActive").checked = true;
-  showMessage(
-    "rosterMessage",
-    "TEU member and authentication account created.",
-    "success"
-  );
+  $("rosterActive").checked=true;
+  showMessage("rosterMessage",`Account "${username}" created and linked to ${payload.callsign}.`,"success");
   await loadRoster();
 }
+
 async function editRosterMember(id) {
   if (!currentSession) return;
   const m = roster.find(x => String(x.id) === String(id));
