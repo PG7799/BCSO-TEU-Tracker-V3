@@ -566,10 +566,11 @@ function getCurrentMonthReportCount(callsign) {
 
 function renderRoster() {
   const rankOrder = {
-    "Commander": 0,
-    "Co Commander": 1,
-    "FTO": 2,
-    "TEU Traffic Member": 3
+    "Overseer": 0,
+    "Commander": 1,
+    "Co Commander": 2,
+    "FTO": 3,
+    "TEU Traffic Member": 4
   };
 
   roster.sort((a, b) => {
