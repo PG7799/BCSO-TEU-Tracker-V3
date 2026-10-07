@@ -108,7 +108,7 @@ end $$;
 -- 1. Go to Authentication -> Users.
 -- 2. Create:
 --      Email: lc0628339@gmail.com
---      Password: zeAdrHgpnH1@
+--      Password: use the current Supabase Auth password for this account.
 -- 3. Copy the user's UUID.
 -- 4. Run:
 --
@@ -132,15 +132,51 @@ create table if not exists public.teu_roster (
     rank text not null,
     subdivision_rank text not null check (
         subdivision_rank in (
-            'TEU Traffic Member',
-            'FTO',
+            'Overseer',
+            'Commander',
             'Co Commander',
-            'Commander'
+            'FTO',
+            'TEU Traffic Member'
         )
+    ),
+    certifications text[] not null default '{}'::text[] check (
+        certifications <@ ARRAY['Speed Unit', 'Commercial Vehicle Enforcement', 'Vehicular Crimes Unit']::text[]
     ),
     active boolean not null default true,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
+);
+
+-- ============================================================
+-- TEU ROLE / SPECIAL ASSIGNMENT MIGRATION
+-- Safe to run against an existing tracker database.
+-- ============================================================
+
+alter table public.teu_roster
+add column if not exists certifications text[] not null default '{}'::text[];
+
+alter table public.teu_roster
+drop constraint if exists teu_roster_subdivision_rank_check;
+
+alter table public.teu_roster
+add constraint teu_roster_subdivision_rank_check
+check (
+    subdivision_rank in (
+        'Overseer',
+        'Commander',
+        'Co Commander',
+        'FTO',
+        'TEU Traffic Member'
+    )
+);
+
+alter table public.teu_roster
+drop constraint if exists teu_roster_certifications_check;
+
+alter table public.teu_roster
+add constraint teu_roster_certifications_check
+check (
+    certifications <@ ARRAY['Speed Unit', 'Commercial Vehicle Enforcement', 'Vehicular Crimes Unit']::text[]
 );
 
 create index if not exists teu_roster_active_idx
@@ -232,6 +268,7 @@ select
     r.name,
     r.rank,
     r.subdivision_rank,
+    r.certifications,
     r.active,
     count(e.id)::integer as monthly_reports
 from public.teu_roster r
@@ -244,6 +281,7 @@ group by
     r.name,
     r.rank,
     r.subdivision_rank,
+    r.certifications,
     r.active;
 
 
