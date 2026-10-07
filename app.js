@@ -487,13 +487,13 @@ async function loadRoster() {
 
   let {data, error} = await sb
     .from("teu_roster")
-    .select("id,callsign,name,rank,subdivision_rank,active,auth_user_id,created_at,updated_at");
+    .select("id,callsign,name,rank,subdivision_rank,certifications,active,auth_user_id,created_at,updated_at");
 
   if (error) {
     // Backward-compatible fallback if auth_user_id has not been added yet.
     const fallback = await sb
       .from("teu_roster")
-      .select("id,callsign,name,rank,subdivision_rank,active,created_at,updated_at");
+      .select("id,callsign,name,rank,subdivision_rank,certifications,active,created_at,updated_at");
 
     if (fallback.error) {
       showMessage(
@@ -608,6 +608,7 @@ function renderRoster() {
         <td>${escapeHtml(m.name)}</td>
         <td>${escapeHtml(m.rank)}</td>
         <td>${escapeHtml(m.subdivision_rank)}</td>
+        <td>${(Array.isArray(m.certifications) && m.certifications.length) ? m.certifications.map(escapeHtml).join(", ") : "None"}</td>
         <td>
           <span class="monthly-reports">${monthlyReports}</span>
         </td>
@@ -622,7 +623,7 @@ function renderRoster() {
         </td>` : ""}
       </tr>`;
   }).join("") :
-  `<tr><td colspan="${showActions ? 7 : 6}" class="empty">No TEU members are currently listed.</td></tr>`;
+  `<tr><td colspan="${showActions ? 8 : 7}" class="empty">No TEU members are currently listed.</td></tr>`;
 }
 async function addRosterMember(event) {
   event.preventDefault();
@@ -649,6 +650,7 @@ async function addRosterMember(event) {
     name:$("rosterName").value.trim(),
     rank:$("rosterRank").value.trim(),
     subdivision_rank:$("rosterSubdivisionRank").value,
+    certifications:Array.from($("rosterCertifications").selectedOptions).map(option => option.value),
     active:$("rosterActive").checked
   };
 
@@ -660,6 +662,27 @@ async function addRosterMember(event) {
   if (error || data?.error) {
     showMessage("rosterMessage",data?.error || error?.message || "Could not create TEU account.","error");
     return;
+  }
+
+  // The Edge Function creates/links the account. Store certifications
+  // separately so existing member creation remains backward compatible.
+  const createdMember = await sb
+    .from("teu_roster")
+    .select("id")
+    .eq("callsign", payload.callsign)
+    .maybeSingle();
+
+  if (!createdMember.error && createdMember.data) {
+    const assignmentUpdate = await sb
+      .from("teu_roster")
+      .update({certifications: payload.certifications})
+      .eq("id", createdMember.data.id);
+
+    if (assignmentUpdate.error) {
+      showMessage("rosterMessage", `Account created, but certifications could not be saved: ${assignmentUpdate.error.message}`, "error");
+      await loadRoster();
+      return;
+    }
   }
 
   $("rosterForm").reset();
@@ -676,14 +699,24 @@ async function editRosterMember(id) {
   const callsign = prompt("Callsign:", m.callsign); if (callsign === null) return;
   const name = prompt("Name:", m.name); if (name === null) return;
   const rank = prompt("Rank:", m.rank); if (rank === null) return;
-  const sub = prompt("Subdivision Rank (TEU Traffic Member, FTO, Co Commander, Commander):", m.subdivision_rank);
+  const sub = prompt("TEU Rank (Overseer, Commander, Co Commander, FTO, TEU Traffic Member):", m.subdivision_rank);
   if (sub === null) return;
+  const assignments = prompt("Certifications (comma-separated: Speed Unit, Commercial Vehicle Enforcement, Vehicular Crimes Unit):", (m.certifications || []).join(", "));
+  if (assignments === null) return;
   const activeInput = prompt("Active? Enter YES or NO:", m.active ? "YES" : "NO");
   if (activeInput === null) return;
 
-  const allowed = ["TEU Traffic Member","FTO","Co Commander","Commander"];
+  const allowed = ["Overseer","Commander","Co Commander","FTO","TEU Traffic Member"];
   if (!allowed.includes(sub.trim())) {
     showMessage("rosterMessage", "Invalid subdivision rank.", "error");
+    return;
+  }
+
+  const allowedAssignments = ["Speed Unit", "Commercial Vehicle Enforcement", "Vehicular Crimes Unit"];
+  const parsedAssignments = assignments.split(",").map(value => value.trim()).filter(Boolean);
+  const invalidAssignments = parsedAssignments.filter(value => !allowedAssignments.includes(value));
+  if (invalidAssignments.length) {
+    showMessage("rosterMessage", `Invalid special assignment(s): ${invalidAssignments.join(", ")}`, "error");
     return;
   }
 
@@ -692,6 +725,7 @@ async function editRosterMember(id) {
     name: name.trim(),
     rank: rank.trim(),
     subdivision_rank: sub.trim(),
+    certifications: [...new Set(parsedAssignments)],
     active: activeInput.trim().toLowerCase() === "yes"
   }).eq("id", id);
 
