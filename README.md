@@ -44,7 +44,7 @@ In Supabase:
 1. Go to **Authentication -> Users**.
 2. Create a new user:
    - Email: `lc0628339@gmail.com`
-   - Password: `zeAdrHgpnH1@`
+   - Password: use the current Supabase Auth password for this account
 3. Copy the user's UUID.
 4. Run this SQL using the actual UUID:
 
