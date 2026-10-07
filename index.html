@@ -84,10 +84,18 @@
             <label>Rank<input id="rosterRank" maxlength="50" required placeholder="Sergeant"></label>
             <label>Subdivision Rank
               <select id="rosterSubdivisionRank" required>
-                <option value="TEU Traffic Member">TEU Traffic Member</option>
-                <option value="FTO">FTO</option>
-                <option value="Co Commander">Co Commander</option>
+                <option value="Overseer">Overseer</option>
                 <option value="Commander">Commander</option>
+                <option value="Co Commander">Co Commander</option>
+                <option value="FTO">FTO</option>
+                <option value="TEU Traffic Member">TEU Traffic Member</option>
+              </select>
+            </label>
+            <label>Certifications
+              <select id="rosterCertifications" multiple size="3" title="Hold Ctrl/Cmd to select multiple">
+                <option value="Speed Unit">Speed Unit</option>
+                <option value="Commercial Vehicle Enforcement">Commercial Vehicle Enforcement</option>
+                <option value="Vehicular Crimes Unit">Vehicular Crimes Unit</option>
               </select>
             </label>
             <label class="roster-active-check">Active<input id="rosterActive" type="checkbox" checked></label>
@@ -100,7 +108,7 @@
         <div class="table-wrap">
           <table class="roster-table">
             <thead><tr>
-              <th>Callsign</th><th>Name</th><th>Rank</th><th>Subdivision Rank</th><th>Monthly Reports</th><th>Status</th>
+              <th>Callsign</th><th>Name</th><th>Rank</th><th>TEU Rank</th><th>Certifications</th><th>Monthly Reports</th><th>Status</th>
               <th id="rosterActionsHeader" class="hidden">Actions</th>
             </tr></thead>
             <tbody id="rosterTable"></tbody>
